@@ -27,6 +27,10 @@ input{padding:6px;margin-right:6px}</style>
   <input name="email" placeholder="Email" required>
   <button>Add</button>
 </form>
+<form method="get" action="/" style="margin-top:15px">
+  <input name="q" placeholder="Search by name or ID" value="{{q}}">
+  <button>Search</button> <a href="/">Clear</a>
+</form>
 <table>
 <tr><th>ID</th><th>Name</th><th>Department</th><th>Email</th><th>Actions</th></tr>
 {% for s in students %}
@@ -39,8 +43,14 @@ input{padding:6px;margin-right:6px}</style>
 
 @app.route("/")
 def index():
-    rows = db().execute("SELECT * FROM students").fetchall()
-    return render_template_string(PAGE, students=rows)
+    q = request.args.get("q", "").strip()
+    if q:
+        rows = db().execute(
+            "SELECT * FROM students WHERE name LIKE ? OR CAST(id AS TEXT)=?",
+            (f"%{q}%", q)).fetchall()
+    else:
+        rows = db().execute("SELECT * FROM students").fetchall()
+    return render_template_string(PAGE, students=rows, q=q)
 
 @app.route("/add", methods=["POST"])
 def add():
