@@ -1,27 +1,35 @@
 pipeline {
     agent any
     environment {
-        IMAGE = "nandakrishnanm/student-app"
-        TAG   = "${env.BRANCH_NAME}"
-        DOCKERHUB = credentials('dockerhub-creds')
+        IMAGE   = 'nandakrishnanm/student-app'
+        VERSION = "${env.BRANCH_NAME}"
     }
     stages {
         stage('Checkout') {
             steps { checkout scm }
         }
         stage('Build Docker Image') {
-            steps { bat 'docker build -t %IMAGE%:%TAG% .' }
+            steps { bat 'docker build -t %IMAGE%:%VERSION% .' }
         }
         stage('Push to DockerHub') {
             steps {
-                bat 'echo %DOCKERHUB_PSW%| docker login -u %DOCKERHUB_USR% --password-stdin'
-                bat 'docker push %IMAGE%:%TAG%'
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-creds',
+                        usernameVariable: 'DH_USER', passwordVariable: 'DH_PASS')]) {
+                    bat 'echo %DH_PASS%| docker login -u %DH_USER% --password-stdin'
+                    bat 'docker push %IMAGE%:%VERSION%'
+                }
             }
         }
         stage('Deploy to Kubernetes') {
             steps {
-                bat 'kubectl apply -f k8s/deployment.yaml'
-                bat 'kubectl rollout restart deployment/student-app-%TAG%'
+                powershell '''
+                $v = $env:VERSION
+                $port = 30000 + [int]$v.Substring(1)
+                (Get-Content k8s/app.yaml) -replace '__VERSION__',$v -replace '__PORT__',$port | Set-Content k8s/rendered.yaml
+                kubectl apply -f k8s/rendered.yaml
+                kubectl rollout restart deployment/student-app-$v
+                kubectl rollout status deployment/student-app-$v --timeout=120s
+                '''
             }
         }
     }

@@ -1,0 +1,5 @@
+students.db
+__pycache__/
+venv/
+.git
+k8s/rendered.yaml
